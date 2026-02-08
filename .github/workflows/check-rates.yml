@@ -5,6 +5,9 @@ on:
     - cron: '0 14 * * *'  # 6 AM PST daily (14:00 UTC)
   workflow_dispatch:       # Manual trigger
 
+permissions:
+  contents: write
+
 jobs:
   check-rates:
     runs-on: ubuntu-latest
