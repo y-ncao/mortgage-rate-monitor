@@ -4,9 +4,11 @@
 import json
 import smtplib
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from email.mime.text import MIMEText
 from pathlib import Path
+
+PST = timezone(timedelta(hours=-8), "PST")
 
 import requests
 
@@ -272,10 +274,10 @@ def send_email(old_rates, new_rates):
         print("Set GMAIL_USER and GMAIL_APP_PASSWORD environment variables")
         return
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    subject = f"SFCU Mortgage Rate Change - {now}"
+    now_pst = datetime.now(PST).strftime("%Y-%m-%d %I:%M %p PST")
+    subject = f"SFCU Mortgage Rate Change - {now_pst}"
 
-    html = build_email_html(old_rates, new_rates, now)
+    html = build_email_html(old_rates, new_rates, now_pst)
 
     msg = MIMEText(html, "html")
     msg["Subject"] = subject
