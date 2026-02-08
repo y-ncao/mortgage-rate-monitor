@@ -14,7 +14,11 @@ jobs:
     env:
       GMAIL_USER: ${{ secrets.GMAIL_USER }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-      ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+      ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+      LOAN_AMOUNT: ${{ vars.LOAN_AMOUNT }}
+      ESTIMATED_VALUE: ${{ vars.ESTIMATED_VALUE }}
+      STATE: ${{ vars.STATE }}
+      ZIPCODE: ${{ vars.ZIPCODE }}
 
     steps:
       - name: Checkout repo
