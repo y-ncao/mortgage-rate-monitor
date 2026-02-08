@@ -54,10 +54,11 @@ def fetch_rates():
         name = pt.get("name", "").strip()
         if not any(tracked.lower() in name.lower() for tracked in TRACKED_PRODUCTS):
             continue
+        display_name = name.replace("Non-Conforming", "Jumbo")
         products = pt.get("products", {}).get("$values", [])
         for prod in products:
             rates.append({
-                "product": name,
+                "product": display_name,
                 "rate": prod.get("rate"),
                 "apr": prod.get("apr"),
                 "monthly_payment": prod.get("monthlyPayments"),
