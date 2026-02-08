@@ -1,4 +1,4 @@
-# Mortgage Rate Monitor
+# SFCU Mortgage Rate Monitor
 
 Monitors SFCU mortgage rates (30-year fixed and 7/1 ARM) daily via GitHub Actions and sends email alerts when rates change.
 
