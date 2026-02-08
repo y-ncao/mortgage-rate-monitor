@@ -16,10 +16,10 @@ LOAN_PARAMS = {
     "occupancy": "2",          # Primary Residence
     "propertyType": "115",     # Single Family
     "loanPurpose": "112",      # Refinance
-    "loanAmount": int(os.environ.get("LOAN_AMOUNT", "2249000")),
-    "estimatedValue": int(os.environ.get("ESTIMATED_VALUE", "2900000")),
-    "state": os.environ.get("STATE", "59"),              # 59 = California
-    "zipcode": os.environ.get("ZIPCODE", "94404"),
+    "loanAmount": int(os.environ["LOAN_AMOUNT"]),
+    "estimatedValue": int(os.environ["ESTIMATED_VALUE"]),
+    "state": os.environ["STATE"],
+    "zipcode": os.environ["ZIPCODE"],
     "creditScore": "780",
 }
 
