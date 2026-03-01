@@ -1,5 +1,74 @@
 [
   {
+    "checked_at": "2026-03-01T14:09:13.514525+00:00",
+    "rates": [
+      {
+        "product": "Jumbo 30 Yr Fixed",
+        "rate": 5.625,
+        "apr": 5.773,
+        "monthly_payment": 12946.51,
+        "points": 1.5,
+        "price": 98.5
+      },
+      {
+        "product": "Jumbo 30 Yr Fixed",
+        "rate": 5.75,
+        "apr": 5.852,
+        "monthly_payment": 13124.55,
+        "points": 1.0,
+        "price": 99.0
+      },
+      {
+        "product": "Jumbo 30 Yr Fixed",
+        "rate": 5.875,
+        "apr": 5.931,
+        "monthly_payment": 13303.68,
+        "points": 0.5,
+        "price": 99.5
+      },
+      {
+        "product": "Jumbo 30 Yr Fixed",
+        "rate": 6.0,
+        "apr": 6.009,
+        "monthly_payment": 13483.89,
+        "points": 0.0,
+        "price": 100.0
+      },
+      {
+        "product": "Jumbo 7 Year ARM",
+        "rate": 5.125,
+        "apr": 6.013,
+        "monthly_payment": 12245.51,
+        "points": 1.5,
+        "price": 98.5
+      },
+      {
+        "product": "Jumbo 7 Year ARM",
+        "rate": 5.25,
+        "apr": 6.03,
+        "monthly_payment": 12419.06,
+        "points": 1.0,
+        "price": 99.0
+      },
+      {
+        "product": "Jumbo 7 Year ARM",
+        "rate": 5.375,
+        "apr": 6.046,
+        "monthly_payment": 12593.75,
+        "points": 0.5,
+        "price": 99.5
+      },
+      {
+        "product": "Jumbo 7 Year ARM",
+        "rate": 5.5,
+        "apr": 6.063,
+        "monthly_payment": 12769.57,
+        "points": 0.0,
+        "price": 100.0
+      }
+    ]
+  },
+  {
     "checked_at": "2026-02-28T14:08:05.460025+00:00",
     "rates": [
       {
