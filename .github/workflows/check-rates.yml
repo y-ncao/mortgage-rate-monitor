@@ -2,11 +2,19 @@ name: Check Mortgage Rates
 
 on:
   schedule:
-    - cron: '0 14 * * *'  # 6 AM PST daily (14:00 UTC)
+    # 13:00 UTC = 6 AM PDT / 5 AM PST. GitHub only guarantees scheduled runs on a
+    # best-effort basis and routinely starts them 1-4 hours late, so treat this
+    # as "some time that morning" rather than an appointment.
+    - cron: '0 13 * * *'
   workflow_dispatch:       # Manual trigger
 
 permissions:
   contents: write
+
+# Two runs committing to main at once would race on push.
+concurrency:
+  group: check-rates
+  cancel-in-progress: false
 
 jobs:
   check-rates:
@@ -22,10 +30,10 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -41,5 +49,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/last_rates.json
-          git diff --staged --quiet || git commit -m "Update mortgage rates [skip ci]"
+          if git diff --staged --quiet; then
+            echo "No change to commit"
+            exit 0
+          fi
+          git commit -m "Update mortgage rates [skip ci]"
+          git pull --rebase --autostash
           git push
+
+      # Runs on any failure above, including a failed pip install or a broken
+      # import, which is why it is stdlib-only and does not import the main script.
+      - name: Notify on failure
+        if: failure()
+        working-directory: src
+        run: python3 notify_failure.py

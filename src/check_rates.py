@@ -4,11 +4,10 @@
 import json
 import smtplib
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
-
-PST = timezone(timedelta(hours=-8), "PST")
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -16,14 +15,19 @@ from config import (
     ALERT_EMAIL,
     CLIENT_ID,
     DATA_FILE,
+    DISPLAY_TIMEZONE,
     FORM_ID,
     GMAIL_APP_PASSWORD,
     GMAIL_USER,
+    HEARTBEAT_DAYS,
     LOAN_PARAMS,
+    MAX_HISTORY,
     SEARCH_URL,
     TRACKED_PRODUCTS,
     USER_ID,
 )
+
+PACIFIC = ZoneInfo(DISPLAY_TIMEZONE)
 
 
 def fetch_rates():
@@ -67,6 +71,31 @@ def fetch_rates():
             })
 
     return rates
+
+
+def validate_rates(rates):
+    """Return reasons the fetched data can't be trusted, empty list if it's fine.
+
+    A response that parses but has lost a product or has null rates means the
+    API changed shape underneath us. Recording that as if it were real data
+    would poison the history and fire a bogus "rates changed" alert.
+    """
+    problems = []
+
+    missing = [
+        tracked for tracked in TRACKED_PRODUCTS
+        if not any(tracked.lower() in r["product"].lower() for r in rates)
+    ]
+    if missing:
+        problems.append(f"No rates returned for: {', '.join(missing)}")
+
+    for r in rates:
+        if r.get("rate") is None or r.get("apr") is None:
+            problems.append(
+                f"Missing rate or APR for {r['product']} at {r.get('points')} points"
+            )
+
+    return problems
 
 
 def load_history():
@@ -121,6 +150,24 @@ def rates_changed(old_rates, new_rates):
     return False
 
 
+def days_since_last_email(history, now):
+    """Days since the last alert, or None if no email is recorded in history."""
+    for snap in history:
+        sent = snap.get("emailed_at")
+        if not sent:
+            continue
+        try:
+            return (now - datetime.fromisoformat(sent)).days
+        except ValueError:
+            continue
+    return None
+
+
+def fmt_timestamp(dt):
+    """Format a UTC datetime in Pacific time, with the right PST/PDT label."""
+    return dt.astimezone(PACIFIC).strftime("%Y-%m-%d %I:%M %p %Z")
+
+
 def fmt_rate(val):
     return f"{val:.3f}%" if val is not None else "N/A"
 
@@ -145,14 +192,32 @@ def diff_arrow(old_val, new_val):
     return f' <span style="color:#2e7d32;">&#9660; {diff:.3f}</span>'
 
 
-def build_email_html(old_rates, new_rates, checked_at):
+def build_email_html(old_rates, new_rates, checked_at, heartbeat=False, quiet_days=None):
     """Build an HTML email body highlighting changes."""
     new_best = best_by_product(new_rates)
     old_best = best_by_product(old_rates) if old_rates else {}
 
+    if heartbeat:
+        title = "SFCU Mortgage Rates &mdash; Still Monitoring"
+        if quiet_days is None:
+            quiet = "No rate change alert has gone out recently."
+        else:
+            quiet = f"No rate change in the last {quiet_days} days."
+        note = (f'<p style="background:#e8f4fd; border-left:4px solid #1565c0; '
+                f'padding:10px 14px; margin:0 0 20px 0;">{quiet} '
+                f'This is a periodic check-in, so that a quiet inbox means rates '
+                f'held steady rather than the monitor having broken.</p>')
+    elif old_rates:
+        title = "SFCU Mortgage Rate Change Alert"
+        note = ""
+    else:
+        title = "SFCU Mortgage Rate Initial Alert"
+        note = ""
+
     html = f"""<html><body style="font-family: -apple-system, Arial, sans-serif; color: #222;">
-<h2 style="margin-bottom:4px;">SFCU Mortgage Rate {"Change" if old_rates else "Initial"} Alert</h2>
+<h2 style="margin-bottom:4px;">{title}</h2>
 <p style="color:#666; margin-top:0;">Checked at {checked_at}</p>
+{note}
 """
 
     if old_rates:
@@ -268,17 +333,12 @@ def format_rate_table(rates, label="Current"):
     return "\n".join(lines)
 
 
-def send_email(old_rates, new_rates):
-    """Send rate change alert via Gmail SMTP."""
+def send_email(subject, html):
+    """Send one email via Gmail SMTP. Returns True if it actually went out."""
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
         print("Email credentials not configured, skipping email notification")
         print("Set GMAIL_USER and GMAIL_APP_PASSWORD environment variables")
-        return
-
-    now_pst = datetime.now(PST).strftime("%Y-%m-%d %I:%M %p PST")
-    subject = f"SFCU Mortgage Rate Change - {now_pst}"
-
-    html = build_email_html(old_rates, new_rates, now_pst)
+        return False
 
     msg = MIMEText(html, "html")
     msg["Subject"] = subject
@@ -289,6 +349,25 @@ def send_email(old_rates, new_rates):
         server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
         server.send_message(msg)
     print(f"Email sent to {ALERT_EMAIL}")
+    return True
+
+
+def send_change_email(old_rates, new_rates, now):
+    """Alert that the best rate moved."""
+    stamp = fmt_timestamp(now)
+    return send_email(
+        f"SFCU Mortgage Rate Change - {stamp}",
+        build_email_html(old_rates, new_rates, stamp),
+    )
+
+
+def send_heartbeat_email(new_rates, now, quiet_days):
+    """Periodic check-in so a silent inbox is distinguishable from a dead job."""
+    stamp = fmt_timestamp(now)
+    return send_email(
+        f"SFCU Mortgage Rates - No Change ({stamp})",
+        build_email_html(None, new_rates, stamp, heartbeat=True, quiet_days=quiet_days),
+    )
 
 
 def main():
@@ -297,26 +376,41 @@ def main():
 
     rates = fetch_rates()
     if not rates:
-        print("ERROR: Failed to fetch any matching rates")
-        sys.exit(1)
+        sys.exit("ERROR: Failed to fetch any matching rates")
+
+    problems = validate_rates(rates)
+    if problems:
+        for problem in problems:
+            print(f"ERROR: {problem}")
+        sys.exit("ERROR: Fetched data failed validation; not recording or alerting")
 
     print(f"Fetched {len(rates)} rate options")
     print(format_rate_table(rates))
 
     history = load_history()
     old_rates = history[0]["rates"] if history else []
+    quiet_days = days_since_last_email(history, now)
 
+    emailed = False
     if rates_changed(old_rates, rates):
         print("\nRates have changed! Sending notification...")
-        send_email(old_rates, rates)
+        emailed = send_change_email(old_rates, rates, now)
+    elif HEARTBEAT_DAYS > 0 and (quiet_days is None or quiet_days >= HEARTBEAT_DAYS):
+        print(f"\nRates unchanged, but no email in {HEARTBEAT_DAYS}+ days. Sending check-in...")
+        emailed = send_heartbeat_email(rates, now, quiet_days)
     else:
         print("\nRates unchanged, no notification needed")
 
     # Prepend new snapshot to history
-    history.insert(0, {
-        "checked_at": now.isoformat(),
-        "rates": rates,
-    })
+    snapshot = {"checked_at": now.isoformat(), "rates": rates}
+    if emailed:
+        snapshot["emailed_at"] = now.isoformat()
+    history.insert(0, snapshot)
+
+    if MAX_HISTORY > 0 and len(history) > MAX_HISTORY:
+        dropped = len(history) - MAX_HISTORY
+        del history[MAX_HISTORY:]
+        print(f"Dropped {dropped} snapshot(s) past the {MAX_HISTORY}-snapshot cap")
 
     save_history(history)
 
